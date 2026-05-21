@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv, set_key
@@ -29,8 +30,30 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ALLOWED_USER_ID = os.getenv('ALLOWED_USER_ID')
 
 PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), 'portfolio.json')
-COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 TRADE_AMOUNT = 1000.0  # Buy $1000 worth of crypto per Strong Buy signal
+
+def get_top_gainers(limit=5):
+    try:
+        url = "https://api.binance.com/api/v3/ticker/24hr"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        valid_coins = []
+        ignored_suffixes = ("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")
+        ignored_stablecoins = ("USDCUSDT", "FDUSDUSDT", "TUSDUSDT", "BUSDUSDT", "EURUSDT")
+        
+        for item in data:
+            symbol = item['symbol']
+            if symbol.endswith("USDT") and not symbol.endswith(ignored_suffixes) and symbol not in ignored_stablecoins:
+                # Also ignore coins with zero volume to avoid dead coins
+                if float(item['quoteVolume']) > 1000000: 
+                    valid_coins.append(item)
+                
+        valid_coins.sort(key=lambda x: float(x['priceChangePercent']), reverse=True)
+        return [coin['symbol'] for coin in valid_coins[:limit]]
+    except Exception as e:
+        print(f"Error fetching top gainers: {e}")
+        return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 
 def load_portfolio():
     if not os.path.exists(PORTFOLIO_FILE):
@@ -70,11 +93,17 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
         return
         
     chat_id = ALLOWED_USER_ID
-    if not chat_id:
-        return
-        
     try:
-        symbols_query = [f"BINANCE:{sym}" for sym in COINS]
+        top_gainers = get_top_gainers(5)
+        active_coins = [sym for sym, data in portfolio["positions"].items() if data["amount"] > 0]
+        
+        # Combine and remove duplicates to ensure we monitor both top gainers and our holdings
+        all_coins_to_analyze = list(set(top_gainers + active_coins))
+        
+        if not all_coins_to_analyze:
+            return
+            
+        symbols_query = [f"BINANCE:{sym}" for sym in all_coins_to_analyze]
         analysis_dict = get_multiple_analysis(
             screener="crypto",
             interval=Interval.INTERVAL_1_MINUTE,
