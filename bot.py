@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv, set_key
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from tradingview_ta import TA_Handler, Interval, Exchange
+from tradingview_ta import TA_Handler, Interval, Exchange, get_multiple_analysis
 
 # --- DUMMY WEB SERVER FOR RENDER ---
 class DummyHandler(BaseHTTPRequestHandler):
@@ -73,16 +73,18 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
     if not chat_id:
         return
         
-    for symbol in COINS:
-        try:
-            handler = TA_Handler(
-                symbol=symbol,
-                exchange="BINANCE",
-                screener="crypto",
-                interval=Interval.INTERVAL_1_MINUTE, # 1-min timeframe
-                timeout=None
-            )
-            analysis = handler.get_analysis()
+    try:
+        symbols_query = [f"BINANCE:{sym}" for sym in COINS]
+        analysis_dict = get_multiple_analysis(
+            screener="crypto",
+            interval=Interval.INTERVAL_1_MINUTE,
+            symbols=symbols_query
+        )
+        
+        for sym_key, analysis in analysis_dict.items():
+            if analysis is None: continue
+            
+            symbol = sym_key.split(":")[1]
             rec = analysis.summary['RECOMMENDATION']
             price = analysis.indicators['close']
             
@@ -118,8 +120,8 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
                     msg = f"🔴 **AUTO-SELL ALERT**\nCoin: {symbol}\nAction: SELL\nPrice: ${price}\nRevenue: ${revenue:.2f}\n{emoji} Profit/Loss: {profit_str}\nNew Balance: ${portfolio['balance']:.2f}"
                     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
                     
-        except Exception as e:
-            print(f"Error analyzing {symbol}: {e}")
+    except Exception as e:
+        print(f"Error analyzing market: {e}")
 
 async def start_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_allowed(update): return
