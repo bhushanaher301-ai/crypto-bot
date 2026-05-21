@@ -1,9 +1,25 @@
 import os
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv, set_key
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from tradingview_ta import TA_Handler, Interval, Exchange
+
+# --- DUMMY WEB SERVER FOR RENDER ---
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Bot is running 24/7!")
+
+def start_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyHandler)
+    server.serve_forever()
+# -----------------------------------
 
 # Load environment variables
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -155,6 +171,9 @@ if __name__ == '__main__':
     if not TOKEN:
         print("ERROR: TELEGRAM_BOT_TOKEN not found in .env file!")
         exit(1)
+        
+    print("Starting Dummy Web Server...")
+    threading.Thread(target=start_dummy_server, daemon=True).start()
         
     print("Starting bot with Trading Engine...")
     app = ApplicationBuilder().token(TOKEN).build()
