@@ -12,8 +12,7 @@ def fetch_klines(symbol, limit=150):
     
     df = pd.DataFrame(data, columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume',
-        'close_time', 'quote_asset_volume', 'number_of_trades',
-        'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+        'close_time', 'quote_asset_volume'
     ])
     df['open'] = df['open'].astype(float)
     df['high'] = df['high'].astype(float)
