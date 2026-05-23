@@ -42,8 +42,8 @@ TRADE_AMOUNT = 1000.0  # Buy $1000 worth of crypto per Strong Buy signal
 
 def get_top_gainers(limit=5):
     try:
-        url = "https://data-api.binance.vision/api/v3/ticker/24hr"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        url = "https://api.mexc.com/api/v3/ticker/24hr"
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()

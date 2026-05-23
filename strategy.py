@@ -5,7 +5,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def fetch_klines(symbol, limit=150):
-    url = f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval=1m&limit={limit}"
+    url = f"https://api.mexc.com/api/v3/klines?symbol={symbol}&interval=1m&limit={limit}"
     response = requests.get(url, timeout=10)
     response.raise_for_status()
     data = response.json()
