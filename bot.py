@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv, set_key
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from tradingview_ta import TA_Handler, Interval, Exchange, get_multiple_analysis
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from flask import Flask
 import logging
@@ -116,41 +116,33 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
         if not all_coins_to_analyze:
             return
             
-        symbols_query = [f"BINANCE:{sym}" for sym in all_coins_to_analyze]
-        analysis_dict = get_multiple_analysis(
-            screener="crypto",
-            interval=Interval.INTERVAL_1_MINUTE,
-            symbols=symbols_query
-        )
+        from strategy import analyze_custom_strategy
         
-        for sym_key, analysis in analysis_dict.items():
-            if analysis is None: continue
+        for symbol in all_coins_to_analyze:
+            try:
+                res = analyze_custom_strategy(symbol)
+            except Exception as e:
+                print(f"Error calculating strategy for {symbol}: {e}", flush=True)
+                continue
             
-            symbol = sym_key.split(":")[1]
-            rec = analysis.summary['RECOMMENDATION']
-            price = analysis.indicators['close']
+            price = res['close']
             
-            # Logic for Buying
-            if rec == 'STRONG_BUY' or rec == 'BUY':  
-                if symbol not in portfolio["positions"] or portfolio["positions"][symbol]["amount"] == 0:
-                    if portfolio["balance"] >= TRADE_AMOUNT:
-                        amount_to_buy = TRADE_AMOUNT / price
-                        portfolio["balance"] -= TRADE_AMOUNT
-                        portfolio["positions"][symbol] = {
-                            "amount": amount_to_buy,
-                            "buy_price": price
-                        }
-                        save_portfolio(portfolio)
-                        msg = f"🟢 **AUTO-BUY ALERT**\nCoin: {symbol}\nAction: BUY\nPrice: ${price}\nAmount: {amount_to_buy:.4f} {symbol}\nCost: ${TRADE_AMOUNT}\nBalance Left: ${portfolio['balance']:.2f}"
-                        await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
-            
-            # Logic for Selling
-            elif rec == 'STRONG_SELL' or rec == 'SELL':
-                if symbol in portfolio["positions"] and portfolio["positions"][symbol]["amount"] > 0:
-                    amount_to_sell = portfolio["positions"][symbol]["amount"]
-                    buy_price = portfolio["positions"][symbol]["buy_price"]
-                    revenue = amount_to_sell * price
-                    profit = revenue - (amount_to_sell * buy_price)
+            # Check Stop Loss / Target or Sell Signal
+            if symbol in portfolio["positions"] and portfolio["positions"][symbol].get("amount", 0) > 0:
+                pos = portfolio["positions"][symbol]
+                amount = pos["amount"]
+                buy_price = pos["buy_price"]
+                sl = pos.get("sl", 0)
+                tgt = pos.get("tgt", 999999)
+                
+                sell_reason = None
+                if price <= sl: sell_reason = "Stop Loss Hit 🔴"
+                elif price >= tgt: sell_reason = "Target Hit 🟢"
+                elif res['sell']: sell_reason = "Strategy Sell Signal 🔴"
+                
+                if sell_reason:
+                    revenue = amount * price
+                    profit = revenue - (amount * buy_price)
                     
                     portfolio["balance"] += revenue
                     portfolio["positions"][symbol] = {"amount": 0.0, "buy_price": 0.0}
@@ -159,8 +151,25 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
                     profit_str = f"+${profit:.2f}" if profit >= 0 else f"-${abs(profit):.2f}"
                     emoji = "📈" if profit >= 0 else "📉"
                     
-                    msg = f"🔴 **AUTO-SELL ALERT**\nCoin: {symbol}\nAction: SELL\nPrice: ${price}\nRevenue: ${revenue:.2f}\n{emoji} Profit/Loss: {profit_str}\nNew Balance: ${portfolio['balance']:.2f}"
+                    msg = f"**AUTO-SELL ALERT**\nCoin: {symbol}\nReason: {sell_reason}\nPrice: ${price:.4f}\nRevenue: ${revenue:.2f}\n{emoji} P/L: {profit_str}\nNew Balance: ${portfolio['balance']:.2f}"
                     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+                    continue
+            
+            # Logic for Buying
+            if res['buy']:
+                if symbol not in portfolio["positions"] or portfolio["positions"][symbol].get("amount", 0) == 0:
+                    if portfolio["balance"] >= TRADE_AMOUNT:
+                        amount_to_buy = TRADE_AMOUNT / price
+                        portfolio["balance"] -= TRADE_AMOUNT
+                        portfolio["positions"][symbol] = {
+                            "amount": amount_to_buy,
+                            "buy_price": price,
+                            "sl": res['atrLow'],
+                            "tgt": res['buyTarget']
+                        }
+                        save_portfolio(portfolio)
+                        msg = f"🟢 **AUTO-BUY ALERT** (CE+HT Strategy)\nCoin: {symbol}\nPrice: ${price:.4f}\nAmount: {amount_to_buy:.4f}\nCost: ${TRADE_AMOUNT}\nStop Loss: ${res['atrLow']:.4f}\nTarget: ${res['buyTarget']:.4f}\nBalance: ${portfolio['balance']:.2f}"
+                        await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
                     
     except Exception as e:
         print(f"Error analyzing market: {e}", flush=True)
