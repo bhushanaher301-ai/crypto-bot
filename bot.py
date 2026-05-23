@@ -42,7 +42,7 @@ TRADE_AMOUNT = 1000.0  # Buy $1000 worth of crypto per Strong Buy signal
 
 def get_top_gainers(limit=5):
     try:
-        url = "https://api.binance.com/api/v3/ticker/24hr"
+        url = "https://data-api.binance.vision/api/v3/ticker/24hr"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
@@ -62,7 +62,7 @@ def get_top_gainers(limit=5):
         valid_coins.sort(key=lambda x: float(x['priceChangePercent']), reverse=True)
         return [coin['symbol'] for coin in valid_coins[:limit]]
     except Exception as e:
-        print(f"Error fetching top gainers: {e}")
+        print(f"Error fetching top gainers: {e}", flush=True)
         return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 
 def load_portfolio():
@@ -160,7 +160,7 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
                     
     except Exception as e:
-        print(f"Error analyzing market: {e}")
+        print(f"Error analyzing market: {e}", flush=True)
 
 async def start_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_allowed(update): return
@@ -210,13 +210,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     if not TOKEN:
-        print("ERROR: TELEGRAM_BOT_TOKEN not found in .env file!")
+        print("ERROR: TELEGRAM_BOT_TOKEN not found in .env file!", flush=True)
         exit(1)
         
-    print("Starting Dummy Web Server...")
+    print("Starting Dummy Web Server...", flush=True)
     threading.Thread(target=start_dummy_server, daemon=True).start()
         
-    print("Starting bot with Trading Engine...")
+    print("Starting bot with Trading Engine...", flush=True)
     app = ApplicationBuilder().token(TOKEN).build()
 
     # Commands
@@ -231,5 +231,5 @@ if __name__ == '__main__':
     # Run analysis every 1 minute (60 seconds), starting 10 seconds after boot
     job_queue.run_repeating(analyze_market, interval=60, first=10)
 
-    print("Bot is polling... Press Ctrl+C to stop.")
+    print("Bot is polling... Press Ctrl+C to stop.", flush=True)
     app.run_polling()
