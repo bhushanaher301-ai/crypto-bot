@@ -8,18 +8,26 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from tradingview_ta import TA_Handler, Interval, Exchange, get_multiple_analysis
 
-# --- DUMMY WEB SERVER FOR RENDER ---
-class DummyHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"Bot is running 24/7!")
+from flask import Flask
+import logging
+
+# Disable Flask logs
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+app_web = Flask(__name__)
+
+@app_web.route('/')
+def home():
+    return "Bot is running 24/7!"
+
+@app_web.route('/health')
+def health():
+    return "OK"
 
 def start_dummy_server():
     port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), DummyHandler)
-    server.serve_forever()
+    app_web.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 # -----------------------------------
 
 # Load environment variables
@@ -35,7 +43,9 @@ TRADE_AMOUNT = 1000.0  # Buy $1000 worth of crypto per Strong Buy signal
 def get_top_gainers(limit=5):
     try:
         url = "https://api.binance.com/api/v3/ticker/24hr"
-        response = requests.get(url, timeout=10)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         data = response.json()
         
         valid_coins = []

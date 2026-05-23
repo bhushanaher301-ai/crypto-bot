@@ -2,3 +2,4 @@ python-telegram-bot[job-queue]
 tradingview-ta==3.3.0
 python-dotenv
 requests
+flask
