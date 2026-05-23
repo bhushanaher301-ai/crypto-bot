@@ -103,6 +103,9 @@ async def analyze_market(context: ContextTypes.DEFAULT_TYPE):
         return
         
     chat_id = ALLOWED_USER_ID
+    if not chat_id:
+        return
+        
     try:
         top_gainers = get_top_gainers(5)
         active_coins = [sym for sym, data in portfolio["positions"].items() if data["amount"] > 0]
